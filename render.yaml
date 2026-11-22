@@ -1,0 +1,13 @@
+# Render.com Blueprint — serverni avtomatik sozlaydi.
+# Render "New → Blueprint" orqali shu faylni o'qib, web-servisni yaratadi.
+services:
+  - type: web
+    name: remote-locator
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

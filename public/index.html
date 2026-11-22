@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Masofaviy Qurilma Lokatori</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4.5 8-11a8 8 0 1 0-16 0c0 6.5 8 11 8 11z"/><circle cx="12" cy="11" r="3"/></svg>
+      <span>Masofaviy Lokator</span>
+    </div>
+    <span class="badge">Rozilikka asoslangan</span>
+  </header>
+
+  <!-- ============ HOME ============ -->
+  <section id="view-home" class="view">
+    <h1>Qurilmangizni masofadan kuzating</h1>
+    <p class="lead">
+      Ikki qurilma internet orqali bog'lanadi. Kuzatiladigan qurilma o'z joylashuvini
+      <b>o'zi ruxsat berib</b> ulashadi; nazoratchi qurilma uni jonli xaritada ko'radi.
+      Ruxsat istalgan vaqtda qaytarib olinadi.
+    </p>
+    <div class="choose">
+      <button class="role-card" id="go-share" type="button">
+        <span class="ic ic-share">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4.5 8-11a8 8 0 1 0-16 0c0 6.5 8 11 8 11z"/><circle cx="12" cy="11" r="3"/></svg>
+        </span>
+        <b>Bu qurilmani ulashish</b>
+        <small>Mening joylashuvimni kuzatishga ruxsat beraman (bu telefon = kuzatiladigan)</small>
+      </button>
+      <button class="role-card" id="go-watch" type="button">
+        <span class="ic ic-watch">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        <b>Boshqa qurilmani kuzatish</b>
+        <small>Juftlashuv kodini kiritib, ulashilgan joylashuvni ko'raman (bu telefon = nazoratchi)</small>
+      </button>
+      <button class="role-card" id="go-invite" type="button">
+        <span class="ic ic-invite">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </span>
+        <b>Taklif havolasi yaratish</b>
+        <small>Telegram orqali yuboriladigan bitta havola oching va o'zingiz kuzatuvchi bo'ling</small>
+      </button>
+    </div>
+    <div class="info-note">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+      <span>Joylashuv brauzerning Geolocation ruxsati orqali olinadi — telefon ham qo'shimcha ruxsat so'raydi. Yashirin kuzatuv yo'q.</span>
+    </div>
+  </section>
+
+  <!-- ============ SHARE (monitored device) ============ -->
+  <section id="view-share" class="view" hidden>
+    <button class="back" data-back type="button">← Orqaga</button>
+    <h2>Bu qurilmani ulashish</h2>
+
+    <div class="plate">
+      <div class="k">Juftlashuv kodi</div>
+      <div class="v" id="share-code">------</div>
+      <div class="copy-row">
+        <button class="mini" id="copy-code" type="button">Kodni nusxalash</button>
+      </div>
+      <p class="plate-hint">Bu kodni nazoratchi qurilmaga bering.</p>
+    </div>
+
+    <div id="share-idle">
+      <p class="consent-explain">
+        Boshlashdan oldin roziligingiz so'raladi. Ulashiladigan narsa:
+        <b>joriy joylashuv</b>, <b>aniqlik radiusi</b> va (imkon bo'lsa) <b>batareya</b>.
+      </p>
+      <button class="btn ok" id="start-share" type="button">Ulashishga ruxsat beraman</button>
+      <p class="sub-hint" id="share-geo-hint"></p>
+    </div>
+
+    <div id="share-active" hidden>
+      <div class="banner warn">
+        <span class="pulse"><span class="ring"></span><span></span></span>
+        <div>
+          <b>Bu qurilma hozir kuzatilmoqda</b>
+          <p>Joylashuvingiz real vaqtda ulashilmoqda. Istalgan vaqtda to'xtating.</p>
+        </div>
+      </div>
+      <div class="rows">
+        <div class="row"><span>Holat</span><b id="s-status" class="pill on">Ulashilmoqda</b></div>
+        <div class="row"><span>Joylashuv</span><b id="s-coords">—</b></div>
+        <div class="row"><span>Aniqlik</span><b id="s-acc">—</b></div>
+        <div class="row"><span>Batareya</span><b id="s-batt">—</b></div>
+        <div class="row"><span>Oxirgi yangilanish</span><b id="s-updated">—</b></div>
+      </div>
+      <button class="btn danger" id="stop-share" type="button">⛔ Ulashishni to'xtatish</button>
+      <p class="sub-hint">To'xtatilganda nazoratchi darhol joylashuvni yo'qotadi.</p>
+    </div>
+  </section>
+
+  <!-- ============ INVITE (create a link to send) ============ -->
+  <section id="view-invite" class="view" hidden>
+    <button class="back" data-back type="button">← Orqaga</button>
+    <h2>Taklif havolasi</h2>
+
+    <div class="plate">
+      <div class="k">Juftlashuv kodi</div>
+      <div class="v" id="invite-code">------</div>
+    </div>
+
+    <label class="lbl" for="invite-link">Kuzatiladigan qurilmaga yuboriladigan havola</label>
+    <input id="invite-link" class="linkfield" readonly>
+    <button class="mini" id="copy-invite" type="button">Havolani nusxalash</button>
+
+    <p class="consent-explain">
+      Bu havolani Telegram orqali yuboring. Qabul qiluvchi uni ochib
+      <b>"Ruxsat beraman"</b> tugmasini bosgandan keyingina siz joylashuvni ko'rasiz.
+    </p>
+
+    <button class="btn" id="invite-start-watch" type="button">Kuzatishni boshlash</button>
+    <p class="sub-hint">Havolani yuborgach, shu tugma orqali kuzatuv ekranini oching.</p>
+  </section>
+
+  <!-- ============ WATCH (monitor) ============ -->
+  <section id="view-watch" class="view" hidden>
+    <button class="back" data-back type="button">← Orqaga</button>
+    <h2>Boshqa qurilmani kuzatish</h2>
+
+    <div id="watch-connect">
+      <div class="field">
+        <label for="watch-code">Juftlashuv kodi</label>
+        <input id="watch-code" inputmode="numeric" maxlength="6" placeholder="------" autocomplete="off">
+      </div>
+      <button class="btn" id="connect-watch" type="button">Ulanish</button>
+      <p class="sub-hint" id="watch-msg">Kuzatiladigan qurilma ekranidagi 6 xonali kodni kiriting.</p>
+    </div>
+
+    <div id="watch-live" hidden>
+      <div id="map"></div>
+      <div class="rows">
+        <div class="row"><span>Holat</span><b id="w-status" class="pill off">Kutilmoqda…</b></div>
+        <div class="row"><span>Joylashuv</span><b id="w-coords">—</b></div>
+        <div class="row"><span>Aniqlik</span><b id="w-acc">—</b></div>
+        <div class="row"><span>Batareya</span><b id="w-batt">—</b></div>
+        <div class="row"><span>Oxirgi yangilanish</span><b id="w-updated">—</b></div>
+      </div>
+      <button class="btn ghost" id="watch-disconnect" type="button">Ulanishni uzish</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    Barcha joylashuv ma'lumotlari faqat ulashish yoqilganda uzatiladi va serverda doimiy saqlanmaydi.
+    Bu — ota-ona nazorati va "Qurilmamni top" tizimlari kabi rozilikka asoslangan yondashuv.
+  </footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="app.js"></script>
+</body>
+</html>
