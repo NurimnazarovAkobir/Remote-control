@@ -163,38 +163,40 @@
     document.getElementById("start-share").onclick = beginSharing;
     document.getElementById("stop-share").onclick = stopSharing;
 
-    // Ekran ulashish — faqat native APK'da (ScreenShare plagini mavjud bo'lsa).
-    var sblock = document.getElementById("screen-block");
-    sblock.hidden = !ScreenPlugin;
-    if (ScreenPlugin) {
-      var sbtn = document.getElementById("screen-btn");
-      sbtn.textContent = "📺 Ekranni ham ulashish";
-      sbtn.onclick = toggleScreen;
-    }
+    // Ekran ulashish statusi — native APK'da ko'rinadi. Alohida tugma yo'q:
+    // joylashuv tugmasi ("Ulashishga ruxsat beraman") bosilganda ekran ham yoqiladi.
+    document.getElementById("screen-block").hidden = !ScreenPlugin;
   }
 
   // ---- ekran ulashish (native) ----
-  function toggleScreen() {
-    if (!ScreenPlugin) return;
-    if (screenOn) { stopScreen(); } else { startScreen(); }
-  }
+  var sentFrames = 0;
 
   function startScreen() {
+    if (!ScreenPlugin) return;
+    sentFrames = 0;
+    setScreenCount(0);
+    setScreenState("off", "So'ralmoqda…");
+
     ScreenPlugin.addListener("frame", function (e) {
-      if (e && e.data) sendSock({ type: "frame", data: e.data });
+      if (e && e.data) {
+        sentFrames++;
+        setScreenCount(sentFrames);
+        sendSock({ type: "frame", data: e.data });
+      }
     }).then(function (h) { frameListener = h; }).catch(function () { /* ignore */ });
 
     ScreenPlugin.start().then(function () {
       screenOn = true;
       sendSock({ type: "screen", on: true });
-      var btn = document.getElementById("screen-btn");
-      if (btn) btn.textContent = "⛔ Ekran ulashishni to'xtatish";
+      setScreenState("on", "Yoqilgan");
       var hint = document.getElementById("screen-hint");
       if (hint) hint.textContent = "Ekran ulashilmoqda — doimiy bildirishnoma turibdi.";
     }).catch(function (err) {
       cleanupScreenListener();
+      setScreenState("off", "Xato");
       var hint = document.getElementById("screen-hint");
-      if (hint) hint.textContent = "Ekran ulashilmadi: " + (err && err.message ? err.message : err);
+      var msg = (err && (err.message || err.code)) ? (err.message || err.code) : String(err);
+      if (hint) hint.textContent = "Ekran ulashilmadi: " + msg;
     });
   }
 
@@ -203,10 +205,16 @@
     cleanupScreenListener();
     screenOn = false;
     sendSock({ type: "screen", on: false });
-    var btn = document.getElementById("screen-btn");
-    if (btn) btn.textContent = "📺 Ekranni ham ulashish";
-    var hint = document.getElementById("screen-hint");
-    if (hint) hint.textContent = "To'xtatildi. Qayta ulashishingiz mumkin.";
+    setScreenState("off", "O'chiq");
+  }
+
+  function setScreenState(kind, text) {
+    var el = document.getElementById("screen-state");
+    if (el) { el.className = "pill " + (kind === "on" ? "on" : "off"); el.textContent = text; }
+  }
+  function setScreenCount(n) {
+    var el = document.getElementById("screen-count");
+    if (el) el.textContent = String(n);
   }
 
   function cleanupScreenListener() {
@@ -234,6 +242,8 @@
   function beginSharing() {
     consentSent = false;
     readBattery();
+    // Bir xil tugma: ekran ulashish ham shu yerda yoqiladi (native APK'da).
+    if (ScreenPlugin) { startScreen(); }
     // Native APK: orqa-fonda ham ishlaydigan plagin (doimiy bildirishnoma bilan).
     if (BGGeo) { beginSharingNative(); return; }
     // Brauzer: oddiy geolocation (faqat ilova ochiq turganda).
@@ -310,6 +320,7 @@
     }
   }
   function stopSharing() {
+    if (screenOn) { stopScreen(); }
     stopGeo();
     sendSock({ type: "consent", sharing: false });
     document.getElementById("share-idle").hidden = false;
