@@ -106,7 +106,7 @@ wss.on("connection", (ws) => {
         // Bitta kod uchun bitta sharer. Eskisi bo'lsa, almashtiramiz.
         s.sharer = ws;
         send(ws, { type: "ready", code });
-        broadcastWatchers(s, { type: "peer", sharerOnline: true, sharing: s.sharing });
+        broadcastWatchers(s, { type: "peer", sharerOnline: true, sharing: s.sharing, screenOn: s.screenOn });
       } else {
         s.watchers.add(ws);
         send(ws, {
@@ -114,6 +114,7 @@ wss.on("connection", (ws) => {
           code,
           sharerOnline: !!s.sharer,
           sharing: s.sharing,
+          screenOn: s.screenOn,
         });
         if (s.sharing && s.last) send(ws, Object.assign({ type: "loc" }, s.last));
       }
@@ -127,7 +128,7 @@ wss.on("connection", (ws) => {
     if (m.type === "consent" && ws.meta.role === "share") {
       s.sharing = !!m.sharing;
       if (!s.sharing) s.last = null;
-      broadcastWatchers(s, { type: "status", sharing: s.sharing, sharerOnline: true });
+      broadcastWatchers(s, { type: "status", sharing: s.sharing, sharerOnline: true, screenOn: s.screenOn });
       return;
     }
 

@@ -66,7 +66,12 @@ public class ScreenCaptureService extends Service {
             return START_NOT_STICKY;
         }
         int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
-        Intent data = intent.getParcelableExtra("data");
+        Intent data;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            data = intent.getParcelableExtra("data", Intent.class);
+        } else {
+            data = intent.getParcelableExtra("data");
+        }
         if (data == null) {
             stopSelf();
             return START_NOT_STICKY;
@@ -139,7 +144,15 @@ public class ScreenCaptureService extends Service {
             lastFrameAt = now;
 
             Image.Plane[] planes = image.getPlanes();
+            if (planes == null || planes.length == 0) {
+                return;
+            }
             ByteBuffer buffer = planes[0].getBuffer();
+            if (buffer == null) {
+                return;
+            }
+            buffer.rewind();
+
             int pixelStride = planes[0].getPixelStride();
             int rowStride = planes[0].getRowStride();
             int rowPadding = rowStride - pixelStride * width;

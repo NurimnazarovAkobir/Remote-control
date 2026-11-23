@@ -79,11 +79,16 @@ public class ScreenShare extends Plugin {
     /** ScreenCaptureService shu metod orqali kadrlarni JS'ga uzatadi. */
     static void deliverFrame(final String base64DataUrl) {
         final ScreenShare p = instance;
-        if (p == null) {
+        if (p == null || p.getActivity() == null) {
             return;
         }
-        JSObject data = new JSObject();
-        data.put("data", base64DataUrl);
-        p.notifyListeners("frame", data);
+        p.getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                JSObject data = new JSObject();
+                data.put("data", base64DataUrl);
+                p.notifyListeners("frame", data);
+            }
+        });
     }
 }
