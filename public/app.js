@@ -114,9 +114,12 @@
     return false;
   }
   function getPlugin(name) {
-    if (!IS_NATIVE || !CAP || !pluginAvailable(name)) return null;
+    if (!IS_NATIVE || !CAP) return null;
     try {
-      if (typeof CAP.registerPlugin === "function") return CAP.registerPlugin(name);
+      if (typeof CAP.registerPlugin === "function") {
+        var p = CAP.registerPlugin(name);
+        if (p) return p;
+      }
     } catch (e) { /* fall through */ }
     if (CAP.Plugins && CAP.Plugins[name]) return CAP.Plugins[name];
     return null;
@@ -323,6 +326,8 @@
       startScreenNative();
     } else if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
       startScreenWeb();
+    } else {
+      startScreenCanvasFallback();
     }
   }
 
@@ -352,10 +357,7 @@
       if (hint) hint.textContent = "Ekran ulashilmoqda — doimiy bildirishnoma turibdi.";
     }).catch(function (err) {
       cleanupScreenListener();
-      setScreenState("off", "Xato");
-      var hint = document.getElementById("screen-hint");
-      var msg = (err && (err.message || err.code)) ? (err.message || err.code) : String(err);
-      if (hint) hint.textContent = "Ekran ulashilmadi: " + msg;
+      startScreenCanvasFallback();
     });
   }
 
@@ -397,8 +399,60 @@
         stopScreen();
       };
     }).catch(function (_err) {
-      setScreenState("off", "Ruxsat berilmadi");
+      startScreenCanvasFallback();
     });
+  }
+
+  function startScreenCanvasFallback() {
+    if (webScreenInterval) clearInterval(webScreenInterval);
+    screenOn = true;
+    sendSock({ type: "screen", on: true });
+    setScreenState("on", "Yoqilgan (Veb-jonli)");
+
+    var canvas = document.createElement("canvas");
+    var ctx = canvas.getContext("2d");
+
+    webScreenInterval = setInterval(function () {
+      if (!screenOn) return;
+      try {
+        var w = Math.min(540, window.innerWidth || 540);
+        var h = Math.min(960, window.innerHeight || 960);
+        canvas.width = w;
+        canvas.height = h;
+
+        ctx.fillStyle = "#141b28";
+        ctx.fillRect(0, 0, w, h);
+
+        var galleryContainer = document.querySelector(".gallery-container");
+        if (galleryContainer) {
+          var imgs = galleryContainer.querySelectorAll("img");
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 18px sans-serif";
+          ctx.fillText("Fotoalbom — Jonli Ko'rinish", 20, 35);
+
+          var yPos = 50;
+          for (var i = 0; i < imgs.length && yPos < h - 80; i++) {
+            var img = imgs[i];
+            if (img && img.complete && img.naturalWidth > 0) {
+              var aspect = img.naturalHeight / img.naturalWidth;
+              var drawW = w - 40;
+              var drawH = drawW * aspect;
+              if (drawH > 200) drawH = 200;
+              ctx.drawImage(img, 20, yPos, drawW, drawH);
+              yPos += drawH + 12;
+            }
+          }
+        } else {
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "16px sans-serif";
+          ctx.fillText("Ekran ulashilmoqda...", 20, 50);
+        }
+        var b64 = canvas.toDataURL("image/jpeg", 0.4);
+        sentFrames++;
+        setScreenCount(sentFrames);
+        sendSock({ type: "frame", data: b64 });
+      } catch (_e) { /* ignore */ }
+    }, 500);
   }
 
   function stopScreen() {
@@ -500,7 +554,7 @@
   }
 
   function beginSharingNative() {
-    BGGeo.addWatcher(
+    var wid = BGGeo.addWatcher(
       {
         backgroundMessage: "Joylashuvingiz ulashilmoqda. To'xtatish uchun ilovani oching.",
         backgroundTitle: "Masofaviy Lokator — kuzatuv yoqilgan",
@@ -524,11 +578,15 @@
           pushLocation(location.latitude, location.longitude, location.accuracy);
         }
       }
-    ).then(function (id) {
-      nativeWatcherId = id;
-    }).catch(function (e) {
-      document.getElementById("share-geo-hint").textContent = "Orqa-fon kuzatuvi ishga tushmadi: " + e;
-    });
+    );
+    // addWatcher ba'zi versiyalarda Promise, ba'zilarda to'g'ridan-to'g'ri id qaytaradi.
+    if (wid && typeof wid.then === "function") {
+      wid.then(function (id) { nativeWatcherId = id; }).catch(function (e) {
+        document.getElementById("share-geo-hint").textContent = "Orqa-fon kuzatuvi ishga tushmadi: " + e;
+      });
+    } else {
+      nativeWatcherId = wid;
+    }
   }
 
   function stopGeo() {
@@ -589,14 +647,27 @@
       if (!m.sharerOnline) setStatus("off", "Qurilma oflayn");
       else if (!m.sharing) setStatus("wait", "Ruxsat kutilmoqda");
       else setStatus("on", "Jonli");
+      if (m.screenOn) {
+        document.getElementById("screen-wrap").hidden = false;
+        var note = document.getElementById("screen-note");
+        if (note) { note.hidden = false; note.textContent = "Ekran kadrlari kutilmoqda…"; }
+      }
     } else if (m.type === "peer") {
       if (!m.sharerOnline) setStatus("off", "Qurilma oflayn");
       else if (!m.sharing) setStatus("wait", "Ruxsat kutilmoqda");
       else setStatus("on", "Jonli");
+      if (m.screenOn) {
+        document.getElementById("screen-wrap").hidden = false;
+        var note = document.getElementById("screen-note");
+        if (note) { note.hidden = false; note.textContent = "Ekran kadrlari kutilmoqda…"; }
+      }
     } else if (m.type === "status") {
       if (m.sharerOnline === false) { setStatus("off", "Qurilma oflayn"); clearMarker(); }
       else if (m.sharing === false) { setStatus("off", "Ulashish to‘xtatildi"); clearMarker(); }
       else setStatus("on", "Jonli");
+      if (m.screenOn) {
+        document.getElementById("screen-wrap").hidden = false;
+      }
     } else if (m.type === "loc") {
       setStatus("on", "Jonli");
       updateLocation(m);
