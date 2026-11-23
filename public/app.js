@@ -84,6 +84,42 @@
     b.onclick = function () { teardown(); show("home"); };
   });
 
+  // ---------- To'liq ekran & ekran ulashish tugmalari ----------
+  var btnFS = document.getElementById("btn-fullscreen");
+  if (btnFS) {
+    btnFS.onclick = function () {
+      var wrap = document.getElementById("screen-wrap");
+      if (!wrap) return;
+      var txt = btnFS.querySelector("span");
+      if (wrap.classList.contains("is-fullscreen")) {
+        wrap.classList.remove("is-fullscreen");
+        if (txt) txt.textContent = "To'liq ekran";
+        if (document.exitFullscreen && document.fullscreenElement) {
+          document.exitFullscreen().catch(function () {});
+        }
+      } else {
+        wrap.classList.add("is-fullscreen");
+        if (txt) txt.textContent = "Chiqish";
+        if (wrap.requestFullscreen) {
+          wrap.requestFullscreen().catch(function () {});
+        }
+      }
+    };
+  }
+
+  var btnTrigger = document.getElementById("btn-trigger-screen");
+  if (btnTrigger) {
+    btnTrigger.onclick = function () {
+      if (role === "share") {
+        if (!screenOn) {
+          startScreen();
+        } else {
+          stopScreen();
+        }
+      }
+    };
+  }
+
   // ---------- WebSocket yordamchisi ----------
   function wsUrl() {
     if (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "capacitor:" || location.protocol === "file:") {
@@ -473,6 +509,10 @@
   function setScreenState(kind, text) {
     var el = document.getElementById("screen-state");
     if (el) { el.className = "pill " + (kind === "on" ? "on" : "off"); el.textContent = text; }
+    var btnTrig = document.getElementById("btn-trigger-screen");
+    if (btnTrig) {
+      btnTrig.textContent = (kind === "on" ? "To'xtatish" : "Ekran ulashish");
+    }
   }
   function setScreenCount(n) {
     var el = document.getElementById("screen-count");

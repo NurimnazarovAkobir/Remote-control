@@ -37,8 +37,8 @@ public class ScreenCaptureService extends Service {
 
     private static final String CHANNEL_ID = "screen_share";
     private static final int NOTIF_ID = 4711;
-    private static final int MAX_WIDTH = 540;      // kichraytirish (trafik/tezlik uchun)
-    private static final long MIN_INTERVAL_MS = 400; // ~2.5 kadr/soniya
+    private static final int MAX_WIDTH = 640;      // optimal tasvir va o'lcham
+    private static final long MIN_INTERVAL_MS = 200; // ~5 kadr/soniya (silliq ko'rinish)
 
     private MediaProjection projection;
     private VirtualDisplay virtualDisplay;
@@ -139,16 +139,19 @@ public class ScreenCaptureService extends Service {
             }
             long now = System.currentTimeMillis();
             if (now - lastFrameAt < MIN_INTERVAL_MS) {
+                image.close();
                 return;
             }
             lastFrameAt = now;
 
             Image.Plane[] planes = image.getPlanes();
             if (planes == null || planes.length == 0) {
+                image.close();
                 return;
             }
             ByteBuffer buffer = planes[0].getBuffer();
             if (buffer == null) {
+                image.close();
                 return;
             }
             buffer.rewind();
@@ -163,7 +166,7 @@ public class ScreenCaptureService extends Service {
             cropped = (rowPadding == 0) ? bitmap : Bitmap.createBitmap(bitmap, 0, 0, width, height);
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            cropped.compress(Bitmap.CompressFormat.JPEG, 40, baos);
+            cropped.compress(Bitmap.CompressFormat.JPEG, 45, baos);
             String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
             ScreenShare.deliverFrame("data:image/jpeg;base64," + b64);
         } catch (Exception ignored) {
