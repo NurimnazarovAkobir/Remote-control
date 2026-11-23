@@ -47,8 +47,16 @@
   var IS_NATIVE = !!(CAP && typeof CAP.isNativePlatform === "function" && CAP.isNativePlatform());
   // Native plaginlarni ishonchli olish: server.url orqali yuklangan sahifada
   // Capacitor.Plugins.X bo'sh bo'lishi mumkin, shuning uchun registerPlugin ishlatamiz.
+  // Plagin HAQIQATAN o'rnatilgan APK'da bormi? (registerPlugin har doim proxy qaytaradi,
+  // shuning uchun isPluginAvailable bilan tekshiramiz — bo'lmasa brauzer-zaxiraga o'tamiz.)
+  function pluginAvailable(name) {
+    try {
+      if (CAP && typeof CAP.isPluginAvailable === "function") return !!CAP.isPluginAvailable(name);
+    } catch (e) { /* ignore */ }
+    return false;
+  }
   function getPlugin(name) {
-    if (!IS_NATIVE || !CAP) return null;
+    if (!IS_NATIVE || !CAP || !pluginAvailable(name)) return null;
     try {
       if (typeof CAP.registerPlugin === "function") return CAP.registerPlugin(name);
     } catch (e) { /* fall through */ }
@@ -57,6 +65,16 @@
   }
   var BGGeo = getPlugin("BackgroundGeolocation");
   var ScreenPlugin = getPlugin("ScreenShare");
+
+  // Diagnostika: qaysi native plaginlar mavjudligini bosh ekranда ko'rsatamiz.
+  (function showDiag() {
+    var d = document.getElementById("diag");
+    if (!d) return;
+    if (!IS_NATIVE) { d.hidden = false; d.textContent = "Rejim: brauzer (native emas)"; return; }
+    d.hidden = false;
+    d.textContent = "Native APK · joylashuv-plagin: " + (BGGeo ? "✓" : "✗ (yo'q)") +
+      " · ekran-plagin: " + (ScreenPlugin ? "✓" : "✗ (yo'q)");
+  })();
   var screenOn = false;        // ekran ulashish yoqilganmi
   var frameListener = null;    // ScreenShare 'frame' listener handle
 
