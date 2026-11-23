@@ -169,12 +169,22 @@ public class ScreenCaptureService extends Service {
     }
 
     private void startForegroundCompat() {
-        Notification n = new Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Masofaviy Lokator — ekran ulashilmoqda")
-            .setContentText("Ekraningiz real vaqtda ko'rsatilmoqda. To'xtatish uchun ilovани oching.")
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setOngoing(true)
-            .build();
+        Notification n;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            n = new Notification.Builder(this, CHANNEL_ID)
+                .setContentTitle("Masofaviy Lokator — ekran ulashilmoqda")
+                .setContentText("Ekraningiz real vaqtda ko'rsatilmoqda. To'xtatish uchun ilovani oching.")
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .setOngoing(true)
+                .build();
+        } else {
+            n = new Notification.Builder(this)
+                .setContentTitle("Masofaviy Lokator — ekran ulashilmoqda")
+                .setContentText("Ekraningiz real vaqtda ko'rsatilmoqda. To'xtatish uchun ilovani oching.")
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .setOngoing(true)
+                .build();
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
         } else {

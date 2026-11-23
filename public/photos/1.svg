@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000" width="100%" height="100%">
+  <defs>
+    <linearGradient id="sky1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8a9ba8"/>
+      <stop offset="50%" stop-color="#b0bec5"/>
+      <stop offset="100%" stop-color="#cfd8dc"/>
+    </linearGradient>
+    <linearGradient id="hill1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#388e3c"/>
+      <stop offset="100%" stop-color="#1b5e20"/>
+    </linearGradient>
+    <linearGradient id="water1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#80deea"/>
+      <stop offset="100%" stop-color="#00838f"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1000" fill="url(#sky1)"/>
+  <path d="M0,450 Q200,420 400,440 T800,430 L800,550 L0,550 Z" fill="url(#water1)" opacity="0.7"/>
+  <path d="M0,500 Q300,460 600,490 T800,470 L800,1000 L0,1000 Z" fill="url(#hill1)"/>
+  <path d="M-50,600 Q200,520 500,580 T850,540 L850,1000 L-50,1000 Z" fill="#2e7d32"/>
+  <!-- Tall grass overlay -->
+  <path d="M50,900 Q60,750 80,700 M120,950 Q140,780 150,720 M200,920 Q220,760 230,710 M350,980 Q380,790 400,730 M500,950 Q520,770 540,710 M650,920 Q680,760 700,700" stroke="#4caf50" stroke-width="6" fill="none"/>
+  <!-- Person silhouette portrait standing -->
+  <g transform="translate(520, 440) scale(0.95)">
+    <circle cx="60" cy="50" r="24" fill="#3e2723"/>
+    <path d="M35,74 C35,74 50,70 75,70 C100,70 110,80 110,120 L110,240 L80,240 L80,380 L50,380 L50,240 L35,240 Z" fill="#37474f"/>
+    <path d="M45,95 L95,95 L95,240 L45,240 Z" fill="#212121"/>
+  </g>
+</svg>

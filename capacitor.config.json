@@ -1,10 +1,5 @@
 {
   "appId": "uz.demo.remotelocator",
   "appName": "Remote Locator",
-  "webDir": "public",
-  "server": {
-    "url": "https://remote-locator.onrender.com",
-    "cleartext": false,
-    "androidScheme": "https"
-  }
+  "webDir": "public"
 }

