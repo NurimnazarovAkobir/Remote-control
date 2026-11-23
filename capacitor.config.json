@@ -3,7 +3,7 @@
   "appName": "Remote Locator",
   "webDir": "public",
   "server": {
-    "url": "https://REPLACE_WITH_YOUR_DEPLOYED_URL",
+    "url": "https://remote-locator.onrender.com",
     "cleartext": false,
     "androidScheme": "https"
   }
