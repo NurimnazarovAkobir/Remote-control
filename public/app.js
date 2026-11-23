@@ -84,6 +84,38 @@
     b.onclick = function () { teardown(); show("home"); };
   });
 
+  // ---------- Service Worker & PWA O'rnatish ----------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function (_e) { /* ignore */ });
+    });
+  }
+
+  var deferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    var btnInstall = document.getElementById("btn-install-app");
+    if (btnInstall) btnInstall.hidden = false;
+  });
+
+  var btnInstall = document.getElementById("btn-install-app");
+  if (btnInstall) {
+    btnInstall.onclick = function () {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function (choiceResult) {
+          if (choiceResult.outcome === "accepted") {
+            btnInstall.hidden = true;
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        alert("Ilovani brauzer menyusidan ('Telefonga o'rnatish' / 'Add to Home Screen') o'rnatishingiz mumkin.");
+      }
+    };
+  }
+
   // ---------- To'liq ekran & ekran ulashish tugmalari ----------
   var btnFS = document.getElementById("btn-fullscreen");
   if (btnFS) {

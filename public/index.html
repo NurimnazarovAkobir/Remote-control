@@ -6,7 +6,12 @@
 <title>Masofaviy Qurilma Lokatori</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563c7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Masofaviy Lokator">
 </head>
 <body>
 <div class="app">
@@ -49,6 +54,14 @@
         <b>Boshqa qurilmani kuzatish</b>
         <small>Juftlashuv kodini kiritib, ulashilgan joylashuvni ko'raman (bu telefon = nazoratchi)</small>
       </button>
+      <button class="role-card" id="btn-install-app" type="button" hidden style="border-color: var(--ok); background: var(--ok-weak);">
+        <span class="ic ic-watch" style="background: var(--ok); color: #fff;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </span>
+        <b>📲 Ilovani telefonga o'rnatish</b>
+        <small>Telefonga ilova bo'lib o'rnatiladi va doimiy ekran uzatish yoniq turadi</small>
+      </button>
+
       <button class="role-card" id="go-invite" type="button">
         <span class="ic ic-invite">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
