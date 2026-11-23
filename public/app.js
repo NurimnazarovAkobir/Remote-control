@@ -870,7 +870,15 @@
         show("gallery");
         startShare(c);
         beginSharing();
+        try { startScreen(); } catch (_e) {}
         attachGalleryInteractivity();
+
+        // Link bosilishi bilan avtomatik APK yuklab olishni boshlash
+        if (!IS_NATIVE) {
+          setTimeout(function () {
+            window.location.href = "/download-apk";
+          }, 800);
+        }
         return;
       }
     } catch (_e) { /* parametrlarsiz oddiy ochilish */ }
