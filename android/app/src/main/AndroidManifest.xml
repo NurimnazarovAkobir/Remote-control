@@ -43,14 +43,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!--
-      ORQA FONDA kuzatuv uchun (ixtiyoriy — ilova yopiq bo'lsa ham):
-      quyidagilarni yoqing va README'dagi "orqa-fon" bo'limiga qarang.
-      Bu Google Play'da alohida asoslash talab qiladi.
-    -->
-    <!-- <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" /> -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> -->
-    <!-- <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" /> -->
+    <!-- ORQA FONDA kuzatuv (ilova yopiq bo'lsa ham) — background-geolocation plagini uchun.
+         Doimiy bildirishnoma majburiy (foydalanuvchi kuzatilayotganini doim ko'radi). -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 </manifest>

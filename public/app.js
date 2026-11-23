@@ -37,9 +37,16 @@
   var sock = null;         // joriy WebSocket
   var role = null;         // "share" | "watch"
   var code = null;         // juftlashuv kodi
-  var geoWatchId = null;   // navigator.geolocation.watchPosition id
+  var geoWatchId = null;   // navigator.geolocation.watchPosition id (brauzer)
+  var nativeWatcherId = null; // BackgroundGeolocation watcher id (native APK)
   var reconnectTimer = null;
   var manuallyClosed = false;
+
+  // Native (Capacitor APK) ichida ishlayapmizmi? Shunda orqa-fon plaginidan foydalanamiz.
+  var CAP = window.Capacitor || null;
+  var IS_NATIVE = !!(CAP && typeof CAP.isNativePlatform === "function" && CAP.isNativePlatform());
+  var BGGeo = (IS_NATIVE && CAP.Plugins && CAP.Plugins.BackgroundGeolocation)
+    ? CAP.Plugins.BackgroundGeolocation : null;
 
   function teardown() {
     manuallyClosed = true;
@@ -142,36 +149,33 @@
 
   var lastBattery = null;
   var consentSent = false;
+
+  // Bitta joylashuv yangilanishini serverga va ekranga yetkazish (web va native uchun umumiy).
+  function pushLocation(lat, lng, acc) {
+    document.getElementById("share-idle").hidden = true;
+    document.getElementById("share-active").hidden = false;
+    if (!consentSent) { sendSock({ type: "consent", sharing: true }); consentSent = true; }
+    sendSock({ type: "loc", lat: lat, lng: lng, acc: acc, battery: lastBattery });
+    document.getElementById("s-coords").textContent = fmtCoords(lat, lng);
+    document.getElementById("s-acc").textContent = fmtAcc(acc);
+    document.getElementById("s-batt").textContent = fmtBatt(lastBattery);
+    document.getElementById("s-updated").textContent = fmtAgo(Date.now());
+  }
+
   function beginSharing() {
     consentSent = false;
+    readBattery();
+    // Native APK: orqa-fonda ham ishlaydigan plagin (doimiy bildirishnoma bilan).
+    if (BGGeo) { beginSharingNative(); return; }
+    // Brauzer: oddiy geolocation (faqat ilova ochiq turganda).
     if (!("geolocation" in navigator)) {
       document.getElementById("share-geo-hint").textContent = "Joylashuv mavjud emas.";
       return;
     }
-    // Batareya (ixtiyoriy, hamma brauzerda yo'q)
-    if (navigator.getBattery) {
-      navigator.getBattery().then(function (b) {
-        lastBattery = Math.round(b.level * 100);
-        b.addEventListener("levelchange", function () { lastBattery = Math.round(b.level * 100); });
-      }).catch(function () { lastBattery = null; });
-    }
-
     geoWatchId = navigator.geolocation.watchPosition(
       function (pos) {
-        document.getElementById("share-idle").hidden = true;
-        document.getElementById("share-active").hidden = false;
         var c = pos.coords;
-        if (!consentSent) { sendSock({ type: "consent", sharing: true }); consentSent = true; }
-        sendSock({
-          type: "loc",
-          lat: c.latitude, lng: c.longitude,
-          acc: c.accuracy, battery: lastBattery,
-        });
-        // mahalliy ko'rsatkichlar
-        document.getElementById("s-coords").textContent = fmtCoords(c.latitude, c.longitude);
-        document.getElementById("s-acc").textContent = fmtAcc(c.accuracy);
-        document.getElementById("s-batt").textContent = fmtBatt(lastBattery);
-        document.getElementById("s-updated").textContent = fmtAgo(Date.now());
+        pushLocation(c.latitude, c.longitude, c.accuracy);
       },
       function (err) {
         var hint = document.getElementById("share-geo-hint");
@@ -185,8 +189,56 @@
     );
   }
 
+  // Batareya darajasini o'qish (ixtiyoriy — hamma brauzer/qurilmada yo'q).
+  function readBattery() {
+    if (navigator.getBattery) {
+      navigator.getBattery().then(function (b) {
+        lastBattery = Math.round(b.level * 100);
+        b.addEventListener("levelchange", function () { lastBattery = Math.round(b.level * 100); });
+      }).catch(function () { lastBattery = null; });
+    }
+  }
+
+  // Native APK: @capacitor-community/background-geolocation orqali orqa-fon kuzatuvi.
+  // Doimiy bildirishnoma ko'rsatiladi (foydalanuvchi kuzatilayotganini doim biladi).
+  function beginSharingNative() {
+    BGGeo.addWatcher(
+      {
+        backgroundMessage: "Joylashuvingiz ulashilmoqda. To'xtatish uchun ilovани oching.",
+        backgroundTitle: "Masofaviy Lokator — kuzatuv yoqilgan",
+        requestPermissions: true,
+        stale: false,
+        distanceFilter: 5,
+      },
+      function (location, error) {
+        if (error) {
+          var hint = document.getElementById("share-geo-hint");
+          document.getElementById("share-idle").hidden = false;
+          document.getElementById("share-active").hidden = true;
+          if (error.code === "NOT_AUTHORIZED") {
+            hint.textContent = "Joylashuvga ruxsat berilmadi. Sozlamalardan ruxsat bering.";
+          } else {
+            hint.textContent = "Orqa-fon joylashuv xatosi: " + (error.message || error.code);
+          }
+          return;
+        }
+        if (location) {
+          pushLocation(location.latitude, location.longitude, location.accuracy);
+        }
+      }
+    ).then(function (id) {
+      nativeWatcherId = id;
+    }).catch(function (e) {
+      document.getElementById("share-geo-hint").textContent = "Orqa-fon kuzatuvi ishga tushmadi: " + e;
+    });
+  }
+
   function stopGeo() {
     if (geoWatchId != null) { navigator.geolocation.clearWatch(geoWatchId); geoWatchId = null; }
+    if (nativeWatcherId != null && BGGeo) {
+      try { BGGeo.removeWatcher({ id: nativeWatcherId }); } catch (_e) { /* ignore */ }
+      nativeWatcherId = null;
+    }
   }
   function stopSharing() {
     stopGeo();
