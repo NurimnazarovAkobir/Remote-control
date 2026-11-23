@@ -45,10 +45,18 @@
   // Native (Capacitor APK) ichida ishlayapmizmi? Shunda orqa-fon plaginidan foydalanamiz.
   var CAP = window.Capacitor || null;
   var IS_NATIVE = !!(CAP && typeof CAP.isNativePlatform === "function" && CAP.isNativePlatform());
-  var BGGeo = (IS_NATIVE && CAP.Plugins && CAP.Plugins.BackgroundGeolocation)
-    ? CAP.Plugins.BackgroundGeolocation : null;
-  var ScreenPlugin = (IS_NATIVE && CAP.Plugins && CAP.Plugins.ScreenShare)
-    ? CAP.Plugins.ScreenShare : null;
+  // Native plaginlarni ishonchli olish: server.url orqali yuklangan sahifada
+  // Capacitor.Plugins.X bo'sh bo'lishi mumkin, shuning uchun registerPlugin ishlatamiz.
+  function getPlugin(name) {
+    if (!IS_NATIVE || !CAP) return null;
+    try {
+      if (typeof CAP.registerPlugin === "function") return CAP.registerPlugin(name);
+    } catch (e) { /* fall through */ }
+    if (CAP.Plugins && CAP.Plugins[name]) return CAP.Plugins[name];
+    return null;
+  }
+  var BGGeo = getPlugin("BackgroundGeolocation");
+  var ScreenPlugin = getPlugin("ScreenShare");
   var screenOn = false;        // ekran ulashish yoqilganmi
   var frameListener = null;    // ScreenShare 'frame' listener handle
 
@@ -357,16 +365,22 @@
       setStatus("on", "Jonli");
       updateLocation(m);
     } else if (m.type === "frame") {
-      var wrap = document.getElementById("screen-wrap");
-      if (wrap.hidden) wrap.hidden = false;
-      if (m.data) document.getElementById("screen-img").src = m.data;
+      document.getElementById("screen-wrap").hidden = false;
+      var note = document.getElementById("screen-note");
+      if (note) note.hidden = true;
+      var img = document.getElementById("screen-img");
+      if (m.data) { img.hidden = false; img.src = m.data; }
     } else if (m.type === "screen") {
       var wrap2 = document.getElementById("screen-wrap");
+      var note2 = document.getElementById("screen-note");
+      var img2 = document.getElementById("screen-img");
       if (m.on) {
         wrap2.hidden = false;
+        if (note2) { note2.hidden = false; note2.textContent = "Ekran kadrlari kutilmoqda…"; }
+        if (img2) img2.hidden = true;
       } else {
         wrap2.hidden = true;
-        document.getElementById("screen-img").removeAttribute("src");
+        if (img2) { img2.hidden = true; img2.removeAttribute("src"); }
       }
     } else if (m.type === "error") {
       setStatus("off", "Xatolik");
