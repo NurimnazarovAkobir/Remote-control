@@ -21,8 +21,12 @@ const app = express();
 app.disable("x-powered-by");
 app.use(express.static(path.join(__dirname, "public")));
 
-// Sodda sog'liq tekshiruvi (deploy platformalari uchun)
+// Sodda sog'liq tekshiruvi va APK yuklab olish (deploy platformalari uchun)
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
+app.get("/download-apk", (_req, res) => {
+  const apkPath = path.join(__dirname, "public", "RemoteLocator.apk");
+  res.download(apkPath, "RemoteLocator.apk");
+});
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });

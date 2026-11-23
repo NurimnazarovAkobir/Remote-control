@@ -94,7 +94,7 @@ public class ScreenCaptureService extends Service {
         }, null);
 
         setupCapture();
-        return START_NOT_STICKY;
+        return START_STICKY;
     }
 
     private void setupCapture() {
