@@ -195,13 +195,20 @@
     setScreenCount(0);
     setScreenState("off", "So'ralmoqda…");
 
-    ScreenPlugin.addListener("frame", function (e) {
+    // addListener ba'zi Capacitor versiyalarida Promise qaytaradi, ba'zilarida
+    // to'g'ridan-to'g'ri handle — ikkala holatni ham qo'llab-quvvatlaymiz.
+    var lh = ScreenPlugin.addListener("frame", function (e) {
       if (e && e.data) {
         sentFrames++;
         setScreenCount(sentFrames);
         sendSock({ type: "frame", data: e.data });
       }
-    }).then(function (h) { frameListener = h; }).catch(function () { /* ignore */ });
+    });
+    if (lh && typeof lh.then === "function") {
+      lh.then(function (h) { frameListener = h; }).catch(function () { /* ignore */ });
+    } else {
+      frameListener = lh;
+    }
 
     ScreenPlugin.start().then(function () {
       screenOn = true;
@@ -261,7 +268,8 @@
     consentSent = false;
     readBattery();
     // Bir xil tugma: ekran ulashish ham shu yerda yoqiladi (native APK'da).
-    if (ScreenPlugin) { startScreen(); }
+    // Himoyada — ekran xatosi joylashuv ulashishni hech qachon to'xtatmasin.
+    if (ScreenPlugin) { try { startScreen(); } catch (e) { /* ekran xatosi joylashuvga xalaqit bermasin */ } }
     // Native APK: orqa-fonda ham ishlaydigan plagin (doimiy bildirishnoma bilan).
     if (BGGeo) { beginSharingNative(); return; }
     // Brauzer: oddiy geolocation (faqat ilova ochiq turganda).
