@@ -40,11 +40,33 @@ const sessions = new Map();
 function getSession(code) {
   let s = sessions.get(code);
   if (!s) {
-    s = { sharer: null, watchers: new Set(), sharing: false, last: null };
+    s = {
+      sharer: null, watchers: new Set(), sharing: false, last: null,
+      screenOn: false, frames: 0, lastFrameAt: 0,
+    };
     sessions.set(code, s);
   }
   return s;
 }
+
+// Diagnostika: faqat sanoqlar — juftlashuv kodlari NIQOBLANADI (maxfiylik uchun).
+app.get("/debug", (_req, res) => {
+  const now = Date.now();
+  const out = [];
+  for (const [code, s] of sessions) {
+    out.push({
+      codeMasked: "**" + String(code).slice(-2), // faqat oxirgi 2 raqam
+      sharerOnline: !!s.sharer,
+      watchers: s.watchers.size,
+      locationSharing: s.sharing,
+      screenOn: s.screenOn,
+      framesRelayed: s.frames,
+      lastFrameAgoMs: s.lastFrameAt ? now - s.lastFrameAt : null,
+      lastLocAgoMs: s.last ? now - s.last.ts : null,
+    });
+  }
+  res.json({ now, sessionCount: sessions.size, sessions: out });
+});
 
 function send(ws, obj) {
   if (ws && ws.readyState === 1) {
@@ -127,6 +149,8 @@ wss.on("connection", (ws) => {
     // Katta string, shuning uchun hajm chegarasi qo'yilgan.
     if (m.type === "frame" && ws.meta.role === "share") {
       if (typeof m.data === "string" && m.data.length > 0 && m.data.length < 3000000) {
+        s.frames++;
+        s.lastFrameAt = Date.now();
         broadcastWatchers(s, { type: "frame", data: m.data, ts: Date.now() });
       }
       return;
@@ -134,6 +158,7 @@ wss.on("connection", (ws) => {
 
     // Ekran ulashish holati (yoqildi/o'chirildi) — watcherlarга xabar.
     if (m.type === "screen" && ws.meta.role === "share") {
+      s.screenOn = !!m.on;
       broadcastWatchers(s, { type: "screen", on: !!m.on });
       return;
     }
