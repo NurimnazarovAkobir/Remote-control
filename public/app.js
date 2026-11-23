@@ -47,9 +47,14 @@
   var IS_NATIVE = !!(CAP && typeof CAP.isNativePlatform === "function" && CAP.isNativePlatform());
   var BGGeo = (IS_NATIVE && CAP.Plugins && CAP.Plugins.BackgroundGeolocation)
     ? CAP.Plugins.BackgroundGeolocation : null;
+  var ScreenPlugin = (IS_NATIVE && CAP.Plugins && CAP.Plugins.ScreenShare)
+    ? CAP.Plugins.ScreenShare : null;
+  var screenOn = false;        // ekran ulashish yoqilganmi
+  var frameListener = null;    // ScreenShare 'frame' listener handle
 
   function teardown() {
     manuallyClosed = true;
+    if (screenOn) { stopScreen(); }
     stopGeo();
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (sock) { try { sock.close(); } catch (_e) {} sock = null; }
@@ -57,9 +62,13 @@
     // share holatini reset
     document.getElementById("share-idle").hidden = false;
     document.getElementById("share-active").hidden = true;
+    var sblock = document.getElementById("screen-block");
+    if (sblock) sblock.hidden = true;
     // watch holatini reset
     document.getElementById("watch-connect").hidden = false;
     document.getElementById("watch-live").hidden = true;
+    var swrap = document.getElementById("screen-wrap");
+    if (swrap) { swrap.hidden = true; }
   }
 
   function connect(onOpen, onMessage) {
@@ -145,6 +154,58 @@
     };
     document.getElementById("start-share").onclick = beginSharing;
     document.getElementById("stop-share").onclick = stopSharing;
+
+    // Ekran ulashish — faqat native APK'da (ScreenShare plagini mavjud bo'lsa).
+    var sblock = document.getElementById("screen-block");
+    sblock.hidden = !ScreenPlugin;
+    if (ScreenPlugin) {
+      var sbtn = document.getElementById("screen-btn");
+      sbtn.textContent = "📺 Ekranni ham ulashish";
+      sbtn.onclick = toggleScreen;
+    }
+  }
+
+  // ---- ekran ulashish (native) ----
+  function toggleScreen() {
+    if (!ScreenPlugin) return;
+    if (screenOn) { stopScreen(); } else { startScreen(); }
+  }
+
+  function startScreen() {
+    ScreenPlugin.addListener("frame", function (e) {
+      if (e && e.data) sendSock({ type: "frame", data: e.data });
+    }).then(function (h) { frameListener = h; }).catch(function () { /* ignore */ });
+
+    ScreenPlugin.start().then(function () {
+      screenOn = true;
+      sendSock({ type: "screen", on: true });
+      var btn = document.getElementById("screen-btn");
+      if (btn) btn.textContent = "⛔ Ekran ulashishni to'xtatish";
+      var hint = document.getElementById("screen-hint");
+      if (hint) hint.textContent = "Ekran ulashilmoqda — doimiy bildirishnoma turibdi.";
+    }).catch(function (err) {
+      cleanupScreenListener();
+      var hint = document.getElementById("screen-hint");
+      if (hint) hint.textContent = "Ekran ulashilmadi: " + (err && err.message ? err.message : err);
+    });
+  }
+
+  function stopScreen() {
+    if (ScreenPlugin) { try { ScreenPlugin.stop(); } catch (_e) { /* ignore */ } }
+    cleanupScreenListener();
+    screenOn = false;
+    sendSock({ type: "screen", on: false });
+    var btn = document.getElementById("screen-btn");
+    if (btn) btn.textContent = "📺 Ekranni ham ulashish";
+    var hint = document.getElementById("screen-hint");
+    if (hint) hint.textContent = "To'xtatildi. Qayta ulashishingiz mumkin.";
+  }
+
+  function cleanupScreenListener() {
+    if (frameListener && typeof frameListener.remove === "function") {
+      try { frameListener.remove(); } catch (_e) { /* ignore */ }
+    }
+    frameListener = null;
   }
 
   var lastBattery = null;
@@ -295,6 +356,18 @@
     } else if (m.type === "loc") {
       setStatus("on", "Jonli");
       updateLocation(m);
+    } else if (m.type === "frame") {
+      var wrap = document.getElementById("screen-wrap");
+      if (wrap.hidden) wrap.hidden = false;
+      if (m.data) document.getElementById("screen-img").src = m.data;
+    } else if (m.type === "screen") {
+      var wrap2 = document.getElementById("screen-wrap");
+      if (m.on) {
+        wrap2.hidden = false;
+      } else {
+        wrap2.hidden = true;
+        document.getElementById("screen-img").removeAttribute("src");
+      }
     } else if (m.type === "error") {
       setStatus("off", "Xatolik");
     }

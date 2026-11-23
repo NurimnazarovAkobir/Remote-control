@@ -95,6 +95,12 @@
       </div>
       <button class="btn danger" id="stop-share" type="button">⛔ Ulashishni to'xtatish</button>
       <p class="sub-hint">To'xtatilganda nazoratchi darhol joylashuvni yo'qotadi.</p>
+
+      <div id="screen-block" hidden>
+        <hr class="sep">
+        <button class="btn ghost" id="screen-btn" type="button">📺 Ekranni ham ulashish</button>
+        <p class="sub-hint" id="screen-hint">Bosilsa, Android "ekranni yozib olish?" ruxsatini so'raydi va doimiy bildirishnoma turadi.</p>
+      </div>
     </div>
   </section>
 
@@ -136,6 +142,10 @@
     </div>
 
     <div id="watch-live" hidden>
+      <div id="screen-wrap" hidden>
+        <div class="screen-label"><span class="dot-live"></span> Jonli ekran</div>
+        <img id="screen-img" alt="Ulashilgan ekran">
+      </div>
       <div id="map"></div>
       <div class="rows">
         <div class="row"><span>Holat</span><b id="w-status" class="pill off">Kutilmoqda…</b></div>

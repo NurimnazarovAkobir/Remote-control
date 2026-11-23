@@ -122,6 +122,21 @@ wss.on("connection", (ws) => {
       broadcastWatchers(s, Object.assign({ type: "loc" }, s.last));
       return;
     }
+
+    // Ekran kadri (base64 JPEG) — sharer yuboradi, watcherlarga uzatiladi.
+    // Katta string, shuning uchun hajm chegarasi qo'yilgan.
+    if (m.type === "frame" && ws.meta.role === "share") {
+      if (typeof m.data === "string" && m.data.length > 0 && m.data.length < 3000000) {
+        broadcastWatchers(s, { type: "frame", data: m.data, ts: Date.now() });
+      }
+      return;
+    }
+
+    // Ekran ulashish holati (yoqildi/o'chirildi) — watcherlarга xabar.
+    if (m.type === "screen" && ws.meta.role === "share") {
+      broadcastWatchers(s, { type: "screen", on: !!m.on });
+      return;
+    }
   });
 
   ws.on("close", () => {
